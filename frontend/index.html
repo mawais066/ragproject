@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Question-Answering AI (RAG)</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Marked for Markdown Parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="app-layout">
+
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="logo-icon">
+          <i data-lucide="sparkles"></i>
+        </div>
+        <div>
+          <h1 class="header-title">PDF RAG Assistant</h1>
+          <p class="header-subtitle">Retrieval-Augmented Generation with strict context grounding</p>
+        </div>
+      </div>
+
+      <div class="header-badges">
+        <div id="apiStatusBadge" class="status-badge checking">
+          <span class="status-dot"></span>
+          <span id="apiStatusText">Checking API...</span>
+        </div>
+        <div id="docStatusBadge" class="status-badge no-doc">
+          <span class="status-dot"></span>
+          <span id="docStatusText">No PDF Uploaded</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="app-main">
+
+      <!-- Left Sidebar: PDF Management & Pipeline Stats -->
+      <aside class="sidebar-panel">
+
+        <!-- Upload Card -->
+        <div class="card upload-card">
+          <h2 class="card-title">
+            <i data-lucide="file-up"></i>
+            Upload PDF Document
+          </h2>
+          <p class="card-desc">Select or drop a PDF to extract, chunk, and embed into FAISS vector database.</p>
+
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="pdfFileInput" accept=".pdf" class="file-input" />
+            <div class="drop-zone-content">
+              <div class="upload-icon-circle">
+                <i data-lucide="upload-cloud"></i>
+              </div>
+              <p class="drop-primary-text">Click to browse or drag & drop</p>
+              <p class="drop-sub-text">Standard .PDF text documents</p>
+            </div>
+            <!-- Uploading overlay -->
+            <div class="upload-overlay" id="uploadOverlay">
+              <div class="spinner"></div>
+              <p id="uploadOverlayText">Processing PDF & generating embeddings...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active File Info Card (hidden until uploaded) -->
+        <div class="card file-info-card hidden" id="fileInfoCard">
+          <div class="card-header-flex">
+            <h2 class="card-title">
+              <i data-lucide="file-check"></i>
+              Active Document
+            </h2>
+            <button id="resetDocBtn" class="btn-sm btn-outline-danger" title="Clear document and upload a new one">
+              <i data-lucide="trash-2"></i> Reset
+            </button>
+          </div>
+
+          <div class="file-chip">
+            <i data-lucide="file-text" class="chip-icon"></i>
+            <span class="file-name" id="infoFileName">document.pdf</span>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-box">
+              <span class="stat-label">Pages</span>
+              <span class="stat-value" id="infoPages">-</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Chunks</span>
+              <span class="stat-value" id="infoChunks">-</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Characters</span>
+              <span class="stat-value" id="infoChars">-</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Vector Store</span>
+              <span class="stat-value highlight">FAISS</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RAG Architecture Info Card -->
+        <div class="card pipeline-card">
+          <h3 class="card-title">
+            <i data-lucide="cpu"></i>
+            How RAG Works
+          </h3>
+          <div class="pipeline-steps">
+            <div class="pipeline-step">
+              <span class="step-num">1</span>
+              <div>
+                <strong>PDF Extraction</strong>
+                <p>Text is parsed per page using PyPDF.</p>
+              </div>
+            </div>
+            <div class="pipeline-step">
+              <span class="step-num">2</span>
+              <div>
+                <strong>Semantic Chunking</strong>
+                <p>Split into overlapping 1000-char blocks.</p>
+              </div>
+            </div>
+            <div class="pipeline-step">
+              <span class="step-num">3</span>
+              <div>
+                <strong>FAISS Vector Index</strong>
+                <p>Dense numerical embeddings are stored.</p>
+              </div>
+            </div>
+            <div class="pipeline-step">
+              <span class="step-num">4</span>
+              <div>
+                <strong>Strict Context Answering</strong>
+                <p>Retrieves top relevant chunks for the LLM.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+
+      <!-- Right Chat Panel -->
+      <section class="chat-panel">
+
+        <!-- Chat Header -->
+        <div class="chat-header">
+          <div class="chat-header-info">
+            <i data-lucide="message-square" class="chat-icon"></i>
+            <div>
+              <h2 class="chat-title">PDF Q&A Dialogue</h2>
+              <p class="chat-subtitle" id="chatContextSubtitle">Upload a PDF document to begin asking questions.</p>
+            </div>
+          </div>
+          <button id="clearChatBtn" class="btn-sm btn-ghost" title="Clear chat messages">
+            <i data-lucide="rotate-ccw"></i> Clear Chat
+          </button>
+        </div>
+
+        <!-- Chat Messages Container -->
+        <div class="chat-messages" id="chatMessages">
+
+          <!-- Empty State Welcome -->
+          <div class="welcome-box" id="welcomeBox">
+            <div class="welcome-icon">
+              <i data-lucide="book-open"></i>
+            </div>
+            <h3>Ready to explore your PDF</h3>
+            <p>Upload any PDF document on the left panel, and ask questions. The AI will strictly answer based only on
+              the retrieved content from your document.</p>
+
+            <div class="sample-questions" id="sampleQuestionsContainer">
+              <span class="sample-title">Try asking once uploaded:</span>
+              <div class="chips-container">
+                <button class="sample-chip"
+                  onclick="applySampleQuestion('What are the main topics covered in this document?')">
+                  "What are the main topics covered in this document?"
+                </button>
+                <button class="sample-chip"
+                  onclick="applySampleQuestion('Can you summarize the key points of this PDF?')">
+                  "Can you summarize the key points of this PDF?"
+                </button>
+                <button class="sample-chip"
+                  onclick="applySampleQuestion('What is the definition of RAG and its main pipeline steps?')">
+                  "What is the definition of RAG and its main pipeline steps?"
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="chat-input-wrapper">
+          <form id="chatForm" class="chat-form">
+            <div class="input-container">
+              <textarea id="questionInput" rows="1" placeholder="Ask a question about the uploaded PDF..."
+                autocomplete="off"></textarea>
+              <button type="submit" id="sendBtn" class="btn-send" title="Send question">
+                <i data-lucide="send"></i>
+              </button>
+            </div>
+            <div class="input-helper">
+              <span>Press <kbd>Enter</kbd> to send, <kbd>Shift + Enter</kbd> for new line</span>
+              <span id="charCount">0/1000</span>
+            </div>
+          </form>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
