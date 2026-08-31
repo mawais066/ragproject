@@ -3,13 +3,35 @@
  */
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Initialize Lucide Icons
-  lucide.createIcons();
+  // Safe Lucide icon initializer
+  function safeCreateIcons() {
+    if (typeof lucide !== "undefined" && typeof lucide.createIcons === "function") {
+      try {
+        lucide.createIcons();
+      } catch (e) {
+        console.warn("Lucide icons rendering skipped:", e);
+      }
+    }
+  }
 
-  // Dynamic API Base URL
-  const API_BASE = (window.location.protocol.startsWith("http") && window.location.port === "8000") 
-    ? "" 
-    : "http://127.0.0.1:8000";
+  // Initialize Lucide Icons
+  safeCreateIcons();
+
+  // Dynamic API Base URL detection
+  const API_BASE = (() => {
+    // 1. If opened directly via file://
+    if (window.location.protocol === "file:") {
+      return "http://127.0.0.1:8000";
+    }
+    // 2. If running locally on a dev server (like Live Server port 5500, 3000, 5173, etc.)
+    if ((window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") &&
+        window.location.port !== "" &&
+        window.location.port !== "8000") {
+      return "http://127.0.0.1:8000";
+    }
+    // 3. For Render, production, or direct FastAPI serving (http://localhost:8000)
+    return "";
+  })();
 
   // State
   let isDocumentLoaded = false;
@@ -58,11 +80,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Update API Key badge
       if (data.has_api_key) {
-        apiStatusBadge.className = "status-badge ready";
-        apiStatusText.textContent = `API Ready (${data.llm_model})`;
+        if (apiStatusBadge) apiStatusBadge.className = "status-badge ready";
+        if (apiStatusText) apiStatusText.textContent = `API Ready (${data.llm_model})`;
       } else {
-        apiStatusBadge.className = "status-badge warning";
-        apiStatusText.textContent = "API Key Missing (.env)";
+        if (apiStatusBadge) apiStatusBadge.className = "status-badge warning";
+        if (apiStatusText) apiStatusText.textContent = "API Key Missing (.env)";
         showToast("Warning: LLM_API_KEY is not set in your .env file.", "warning");
       }
 
@@ -79,42 +101,46 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch (err) {
       console.warn("Could not reach backend status endpoint:", err);
-      apiStatusBadge.className = "status-badge warning";
-      apiStatusText.textContent = "Connecting to Server...";
+      if (apiStatusBadge) apiStatusBadge.className = "status-badge warning";
+      if (apiStatusText) apiStatusText.textContent = "Connecting to Server...";
     }
   }
 
   // -------------------------------------------------------------
   // File Upload Handlers (Drag & Drop + Click)
   // -------------------------------------------------------------
-  ["dragenter", "dragover"].forEach((eventName) => {
-    dropZone.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.add("dragover");
+  if (dropZone) {
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add("dragover");
+      });
     });
-  });
 
-  ["dragleave", "drop"].forEach((eventName) => {
-    dropZone.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.remove("dragover");
+    ["dragleave", "drop"].forEach((eventName) => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove("dragover");
+      });
     });
-  });
 
-  dropZone.addEventListener("drop", (e) => {
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileUpload(files[0]);
-    }
-  });
+    dropZone.addEventListener("drop", (e) => {
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        handleFileUpload(files[0]);
+      }
+    });
+  }
 
-  fileInput.addEventListener("change", (e) => {
-    if (fileInput.files.length > 0) {
-      handleFileUpload(fileInput.files[0]);
-    }
-  });
+  if (fileInput) {
+    fileInput.addEventListener("change", (e) => {
+      if (fileInput.files && fileInput.files.length > 0) {
+        handleFileUpload(fileInput.files[0]);
+      }
+    });
+  }
 
   async function handleFileUpload(file) {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
@@ -123,14 +149,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Set uploading state
-    dropZone.classList.add("uploading");
-    uploadOverlayText.textContent = `Reading & chunking "${file.name}"...`;
+    if (dropZone) dropZone.classList.add("uploading");
+    if (uploadOverlayText) uploadOverlayText.textContent = `Reading & chunking "${file.name}"...`;
 
     const formData = new FormData();
     formData.append("file", file);
 
     try {
-      uploadOverlayText.textContent = "Generating embeddings & building vector index...";
+      if (uploadOverlayText) uploadOverlayText.textContent = "Generating embeddings & building vector index...";
       const response = await fetch(`${API_BASE}/upload-pdf`, {
         method: "POST",
         body: formData,
@@ -147,8 +173,8 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       showToast(error.message, "error");
     } finally {
-      dropZone.classList.remove("uploading");
-      fileInput.value = ""; // Reset input so same file can be re-uploaded if needed
+      if (dropZone) dropZone.classList.remove("uploading");
+      if (fileInput) fileInput.value = ""; // Reset input so same file can be re-uploaded if needed
     }
   }
 
@@ -157,125 +183,133 @@ document.addEventListener("DOMContentLoaded", () => {
     activeFileName = stats.filename || "Uploaded PDF";
 
     // Update File info card
-    infoFileName.textContent = activeFileName;
-    infoPages.textContent = stats.total_pages ?? "-";
-    infoChunks.textContent = stats.total_chunks ?? "-";
-    infoChars.textContent = stats.total_characters ? stats.total_characters.toLocaleString() : "-";
-    fileInfoCard.classList.remove("hidden");
+    if (infoFileName) infoFileName.textContent = activeFileName;
+    if (infoPages) infoPages.textContent = stats.total_pages ?? "-";
+    if (infoChunks) infoChunks.textContent = stats.total_chunks ?? "-";
+    if (infoChars) infoChars.textContent = stats.total_characters ? stats.total_characters.toLocaleString() : "-";
+    if (fileInfoCard) fileInfoCard.classList.remove("hidden");
 
     // Update Header badge
-    docStatusBadge.className = "status-badge has-doc";
-    docStatusText.textContent = `Indexed: ${activeFileName}`;
+    if (docStatusBadge) docStatusBadge.className = "status-badge has-doc";
+    if (docStatusText) docStatusText.textContent = `Indexed: ${activeFileName}`;
 
     // Update Chat subtitle
-    chatContextSubtitle.textContent = `Asking questions against "${activeFileName}"`;
+    if (chatContextSubtitle) chatContextSubtitle.textContent = `Asking questions against "${activeFileName}"`;
 
-    lucide.createIcons();
+    safeCreateIcons();
   }
 
   function setDocumentEmptyState() {
     isDocumentLoaded = false;
     activeFileName = "";
 
-    fileInfoCard.classList.add("hidden");
-    docStatusBadge.className = "status-badge no-doc";
-    docStatusText.textContent = "No PDF Uploaded";
-    chatContextSubtitle.textContent = "Upload a PDF document to begin asking questions.";
+    if (fileInfoCard) fileInfoCard.classList.add("hidden");
+    if (docStatusBadge) docStatusBadge.className = "status-badge no-doc";
+    if (docStatusText) docStatusText.textContent = "No PDF Uploaded";
+    if (chatContextSubtitle) chatContextSubtitle.textContent = "Upload a PDF document to begin asking questions.";
   }
 
   // -------------------------------------------------------------
   // Document Reset Handler
   // -------------------------------------------------------------
-  resetDocBtn.addEventListener("click", async () => {
-    try {
-      const res = await fetch(`${API_BASE}/reset`, { method: "POST" });
-      if (res.ok) {
-        setDocumentEmptyState();
-        showToast("PDF document cleared. You can now upload a new one.", "info");
+  if (resetDocBtn) {
+    resetDocBtn.addEventListener("click", async () => {
+      try {
+        const res = await fetch(`${API_BASE}/reset`, { method: "POST" });
+        if (res.ok) {
+          setDocumentEmptyState();
+          showToast("PDF document cleared. You can now upload a new one.", "info");
+        }
+      } catch (e) {
+        showToast("Failed to reset document.", "error");
       }
-    } catch (e) {
-      showToast("Failed to reset document.", "error");
-    }
-  });
+    });
+  }
 
   // -------------------------------------------------------------
   // Chat Interaction & Q&A
   // -------------------------------------------------------------
-  questionInput.addEventListener("input", () => {
-    // Auto resize
-    questionInput.style.height = "auto";
-    questionInput.style.height = Math.min(questionInput.scrollHeight, 120) + "px";
-    charCount.textContent = `${questionInput.value.length}/1000`;
-  });
+  if (questionInput) {
+    questionInput.addEventListener("input", () => {
+      questionInput.style.height = "auto";
+      questionInput.style.height = Math.min(questionInput.scrollHeight, 120) + "px";
+      if (charCount) charCount.textContent = `${questionInput.value.length}/1000`;
+    });
 
-  questionInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    questionInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (chatForm) chatForm.dispatchEvent(new Event("submit"));
+      }
+    });
+  }
+
+  if (chatForm) {
+    chatForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      chatForm.dispatchEvent(new Event("submit"));
-    }
-  });
+      const question = questionInput ? questionInput.value.trim() : "";
 
-  chatForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const question = questionInput.value.trim();
+      if (!question) return;
 
-    if (!question) return;
-
-    if (!isDocumentLoaded) {
-      showToast("Please upload a PDF document first before asking questions!", "warning");
-      return;
-    }
-
-    if (isAsking) return;
-
-    // Reset input
-    questionInput.value = "";
-    questionInput.style.height = "auto";
-    charCount.textContent = "0/1000";
-
-    // Hide welcome box if visible
-    if (welcomeBox) welcomeBox.style.display = "none";
-
-    // Append user message
-    appendUserMessage(question);
-
-    // Append loading typing bubble
-    const typingElement = appendTypingIndicator();
-    isAsking = true;
-    sendBtn.disabled = true;
-
-    try {
-      const response = await fetch(`${API_BASE}/ask`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-      });
-
-      const data = await response.json();
-
-      // Remove typing indicator
-      typingElement.remove();
-
-      if (!response.ok) {
-        throw new Error(data.detail || "An error occurred while answering.");
+      if (!isDocumentLoaded) {
+        showToast("Please upload a PDF document first before asking questions!", "warning");
+        return;
       }
 
-      appendAssistantMessage(data.answer, data.sources);
-    } catch (error) {
-      typingElement.remove();
-      appendAssistantMessage(
-        `**Error:** ${error.message}\n\n*Please ensure your LLM API credentials are configured in the .env file.*`,
-        []
-      );
-      showToast(error.message, "error");
-    } finally {
-      isAsking = false;
-      sendBtn.disabled = false;
-      questionInput.focus();
-    }
-  });
+      if (isAsking) return;
+
+      // Reset input
+      if (questionInput) {
+        questionInput.value = "";
+        questionInput.style.height = "auto";
+      }
+      if (charCount) charCount.textContent = "0/1000";
+
+      // Hide welcome box if visible
+      if (welcomeBox) welcomeBox.style.display = "none";
+
+      // Append user message
+      appendUserMessage(question);
+
+      // Append loading typing bubble
+      const typingElement = appendTypingIndicator();
+      isAsking = true;
+      if (sendBtn) sendBtn.disabled = true;
+
+      try {
+        const response = await fetch(`${API_BASE}/ask`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+
+        const data = await response.json();
+
+        // Remove typing indicator
+        if (typingElement) typingElement.remove();
+
+        if (!response.ok) {
+          throw new Error(data.detail || "An error occurred while answering.");
+        }
+
+        appendAssistantMessage(data.answer, data.sources);
+      } catch (error) {
+        if (typingElement) typingElement.remove();
+        appendAssistantMessage(
+          `**Error:** ${error.message}\n\n*Please ensure your LLM API credentials are configured.*`,
+          []
+        );
+        showToast(error.message, "error");
+      } finally {
+        isAsking = false;
+        if (sendBtn) sendBtn.disabled = false;
+        if (questionInput) questionInput.focus();
+      }
+    });
+  }
 
   function appendUserMessage(text) {
+    if (!chatMessages) return;
     const row = document.createElement("div");
     row.className = "message-row user";
     row.innerHTML = `
@@ -287,11 +321,12 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     `;
     chatMessages.appendChild(row);
-    lucide.createIcons();
+    safeCreateIcons();
     scrollToBottom();
   }
 
   function appendTypingIndicator() {
+    if (!chatMessages) return null;
     const row = document.createElement("div");
     row.className = "message-row assistant";
     row.innerHTML = `
@@ -305,17 +340,27 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     `;
     chatMessages.appendChild(row);
-    lucide.createIcons();
+    safeCreateIcons();
     scrollToBottom();
     return row;
   }
 
   function appendAssistantMessage(markdownAnswer, sources = []) {
+    if (!chatMessages) return;
     const row = document.createElement("div");
     row.className = "message-row assistant";
 
     // Parse Markdown safely
-    const parsedHtml = marked.parse(markdownAnswer);
+    let parsedHtml = "";
+    if (typeof marked !== "undefined" && typeof marked.parse === "function") {
+      try {
+        parsedHtml = marked.parse(markdownAnswer);
+      } catch (e) {
+        parsedHtml = escapeHtml(markdownAnswer);
+      }
+    } else {
+      parsedHtml = escapeHtml(markdownAnswer);
+    }
 
     let sourcesHtml = "";
     if (sources && sources.length > 0) {
@@ -356,42 +401,50 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
     chatMessages.appendChild(row);
-    lucide.createIcons();
+    safeCreateIcons();
     scrollToBottom();
   }
 
   function scrollToBottom() {
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    if (chatMessages) {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
   }
 
   // Clear Chat Messages
-  clearChatBtn.addEventListener("click", () => {
-    chatMessages.innerHTML = "";
-    if (welcomeBox) {
-      welcomeBox.style.display = "flex";
-      chatMessages.appendChild(welcomeBox);
-    }
-  });
+  if (clearChatBtn) {
+    clearChatBtn.addEventListener("click", () => {
+      if (chatMessages) {
+        chatMessages.innerHTML = "";
+        if (welcomeBox) {
+          welcomeBox.style.display = "flex";
+          chatMessages.appendChild(welcomeBox);
+        }
+      }
+    });
+  }
 
   // Sample Questions Quick Click
   window.applySampleQuestion = function (text) {
-    questionInput.value = text;
-    questionInput.focus();
-    // Dispatch input to resize
-    questionInput.dispatchEvent(new Event("input"));
+    if (questionInput) {
+      questionInput.value = text;
+      questionInput.focus();
+      questionInput.dispatchEvent(new Event("input"));
+    }
   };
 
   // Toggle Sources dropdown
   window.toggleSources = function (btn) {
     btn.classList.toggle("open");
     const list = btn.nextElementSibling;
-    list.classList.toggle("show");
+    if (list) list.classList.toggle("show");
   };
 
   // -------------------------------------------------------------
   // Toast Notifications
   // -------------------------------------------------------------
   function showToast(message, type = "info") {
+    if (!toastContainer) return;
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
 
@@ -406,7 +459,7 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
     toastContainer.appendChild(toast);
-    lucide.createIcons();
+    safeCreateIcons();
 
     setTimeout(() => {
       toast.style.opacity = "0";

@@ -8,10 +8,12 @@ services:
       - key: PYTHON_VERSION
         value: 3.10.13
       - key: LLM_BASE_URL
-        value: https://integrate.api.nvidia.com/v1
-      - key: LLM_MODEL_NAME
-        value: qwen/qwen2.5-7b-instruct
-      - key: EMBEDDING_MODEL_TYPE
-        value: huggingface_qwen
+        value: https://api-inference.huggingface.co
+      - key: LLM_MODEL
+        value: Qwen/Qwen2.5-72B-Instruct
+      - key: EMBEDDING_MODEL
+        value: futur/Qwen3-Embedding-0.6B-model2vec-onnx
+      - key: TOP_K
+        value: "4"
       - key: LLM_API_KEY
         sync: false
